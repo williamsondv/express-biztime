@@ -2,6 +2,7 @@ const db = require("../db");
 const express = require("express");
 const router = new express.Router();
 const ExpressError = require("../expressError");
+const slugify = require("slugify");
 
 router.get("/", async (req, res) => {
   const results = await db.query(
@@ -25,21 +26,30 @@ router.get("/:code", async (req, res) => {
     [code]
   );
 
+  const industryResult = await db.query(
+    `SELECT industry_code FROM companies_industries WHERE comp_code = $1`,
+    [code]
+  );
+
   if (results.rows.length === 0) {
     throw new ExpressError(`No such company: ${code}`, 404);
   }
 
-  const company = compResult.rows[0];
+  const company = results.rows[0];
   const invoices = invResult.rows;
+  const industries = industryResult.rows;
 
   company.invoices = invoices.map((inv) => inv.id);
+  company.industries = industries;
 
   return res.json({ company: company });
 });
 
 router.post("/", async (req, res, next) => {
   try {
-    const { code, name, description } = req.body;
+    const { name, description } = req.body;
+    let code = slugify(name, { lower: true });
+
     const results = await db.query(
       `INSERT INTO companies (code, name, description) VALUES ($1, $2, $3)
       RETURNING code, name, description`,
